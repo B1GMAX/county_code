@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:county_code/country_information.dart';
+import 'package:county_code/model/country_information.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:rxdart/rxdart.dart';
@@ -8,6 +8,32 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
 class NumberInputBloc {
+  late final String _currentAddress;
+  final List<CountryInformation> _countryInformation = [];
+
+  final BehaviorSubject<bool> _textStreamController = BehaviorSubject();
+
+  final BehaviorSubject<List<CountryInformation>> _countriesStreamController =
+      BehaviorSubject();
+  final BehaviorSubject<CountryInformation> _takeCountryStreamController =
+      BehaviorSubject();
+
+  Stream<List<CountryInformation>> get countriesStream =>
+      _countriesStreamController.stream;
+
+  Stream<bool> get textStream => _textStreamController.stream;
+
+  Stream<CountryInformation> get takeCountryStream =>
+      _takeCountryStreamController.stream;
+
+  Sink<CountryInformation> get takeCountrySink =>
+      _takeCountryStreamController.sink;
+
+  final TextEditingController numberController =
+      MaskedTextController(mask: '(000)000-0000');
+
+  final TextEditingController inputTextController = TextEditingController();
+
   NumberInputBloc() {
     _determinePosition();
     _getCountryData();
@@ -15,7 +41,7 @@ class NumberInputBloc {
       _buttonChange();
     });
     inputTextController.addListener(() {
-      countriesStreamController.add(countryInformation
+      _countriesStreamController.add(_countryInformation
           .where((element) =>
               element.countryName
                   .toLowerCase()
@@ -27,36 +53,8 @@ class NumberInputBloc {
     });
   }
 
-  late final String _currentAddress;
-
-  final BehaviorSubject<bool> textStreamController = BehaviorSubject();
-
-  Stream<bool> get textStream => textStreamController.stream;
-
-  final BehaviorSubject<List<CountryInformation>> countriesStreamController =
-      BehaviorSubject();
-
-  Stream<List<CountryInformation>> get countriesStream =>
-      countriesStreamController.stream;
-
-  final BehaviorSubject<CountryInformation> takeCountryStreamController =
-      BehaviorSubject();
-
-  Stream<CountryInformation> get takeCountryStream =>
-      takeCountryStreamController.stream;
-
-  Sink<CountryInformation> get takeCountrySink =>
-      takeCountryStreamController.sink;
-
-  final TextEditingController numberController =
-      MaskedTextController(mask: '(000)000-0000');
-
-  final TextEditingController inputTextController = TextEditingController();
-
-  final List<CountryInformation> countryInformation = [];
-
   void _buttonChange() {
-    textStreamController.add(numberController.text.length < 13);
+    _textStreamController.add(numberController.text.length < 13);
   }
 
   void _getCountryData() async {
@@ -76,26 +74,23 @@ class NumberInputBloc {
             listOfNumber.isNotEmpty ? listOfNumber[0] : '';
         final Map<String, dynamic> flags = map['flags'];
         final String countryFlag = flags['png'] ?? '';
-        countryInformation.add(CountryInformation(
+        _countryInformation.add(CountryInformation(
           countryFlag: countryFlag,
           countryName: countryName,
           shortNumber: startNumber + secondNumber,
         ));
       }
     }
-    countriesStreamController.add(countryInformation);
+    _countriesStreamController.add(_countryInformation);
   }
 
   void _determinePosition() async {
-    final bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return Future.error('Location services are disabled.');
     }
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -113,7 +108,7 @@ class NumberInputBloc {
         localeIdentifier: 'en');
     final Placemark place = placemarks[0];
     _currentAddress = place.country.toString();
-    takeCountryStreamController.add(countryInformation
+    _takeCountryStreamController.add(_countryInformation
         .where((element) => element.countryName == _currentAddress)
         .toList()
         .first);
@@ -122,7 +117,7 @@ class NumberInputBloc {
   void dispose() {
     numberController.clear();
     inputTextController.clear();
-    textStreamController.close();
-    countriesStreamController.close();
+    _textStreamController.close();
+    _countriesStreamController.close();
   }
 }
